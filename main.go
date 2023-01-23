@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 
 	_ "modernc.org/sqlite"
@@ -31,7 +32,9 @@ func main() {
 func API_endpoint(writer http.ResponseWriter, request *http.Request) {
 	request_url_path := fmt.Sprintf("%#v", request.URL.Path)
 	game_name := request_url_path[13 : len(request_url_path)-1]
-	fmt.Println(game_name)
+	fmt.Println("Before sanitation: ", game_name)
+	game_name = sanitize_input(game_name)
+	println("After sanitation: ", game_name)
 
 	switch request.Method {
 	case "GET":
@@ -168,6 +171,11 @@ func open_database_connection() *sql.DB {
 	}
 	fmt.Println("Database connection opened. SQLite version: ", version)
 	return database
+}
+
+func sanitize_input(str string) string {
+	var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
+	return nonAlphanumericRegex.ReplaceAllString(str, "")
 }
 
 func create_table_if_not_exists(game_name string) {
