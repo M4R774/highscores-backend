@@ -25,7 +25,7 @@ func main() {
 	http.HandleFunc("/highscores/", API_endpoint)
 
 	fmt.Println("Starting http server on port", PORT)
-	http.ListenAndServe("localhost:"+strconv.Itoa(PORT), nil)
+	http.ListenAndServe("0.0.0.0:"+strconv.Itoa(PORT), nil)
 }
 
 func API_endpoint(writer http.ResponseWriter, request *http.Request) {
