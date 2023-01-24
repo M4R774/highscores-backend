@@ -175,7 +175,8 @@ func open_database_connection() *sql.DB {
 
 func sanitize_input(str string) string {
 	var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
-	return nonAlphanumericRegex.ReplaceAllString(str, "")
+	str = nonAlphanumericRegex.ReplaceAllString(str, "")
+	return fmt.Sprintf("%q", str)
 }
 
 func create_table_if_not_exists(game_name string) {
