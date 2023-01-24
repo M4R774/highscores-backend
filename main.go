@@ -32,9 +32,7 @@ func main() {
 func API_endpoint(writer http.ResponseWriter, request *http.Request) {
 	request_url_path := fmt.Sprintf("%#v", request.URL.Path)
 	game_name := request_url_path[13 : len(request_url_path)-1]
-	fmt.Println("Before sanitation: ", game_name)
 	game_name = sanitize_input(game_name)
-	println("After sanitation: ", game_name)
 
 	switch request.Method {
 	case "GET":
@@ -55,16 +53,15 @@ func API_endpoint(writer http.ResponseWriter, request *http.Request) {
 }
 
 func get_high_scores(game_name string) string {
-	stmt, err := database.Prepare("SELECT name, score FROM ? ORDER BY score DESC")
+	stmt, err := database.Prepare(fmt.Sprint("SELECT name, score FROM ", game_name, " ORDER BY score DESC"))
 	if err != nil {
 		panic(err)
 	}
 	defer stmt.Close()
 	fmt.Println(game_name)
-	fmt.Println(stmt)
 	rows, err := stmt.Query(game_name)
 	if err != nil {
-		return "No such game as " + game_name
+		return "No high scores for " + game_name
 	}
 	defer rows.Close()
 	scores_string := ""
@@ -75,9 +72,32 @@ func get_high_scores(game_name string) string {
 		if err != nil {
 			panic(err)
 		}
-		scores_string += fmt.Sprintf("%s: %d\n", name, score)
+		scores_string += fmt.Sprintf("%-20s %d\n", name, score)
 	}
 	return scores_string
+}
+
+func add_high_score(name string, score int, game_name string) string {
+	if number_of_high_scores(game_name) >= 10 && score <= lowest_score(game_name) {
+		fmt.Println(name, "tried to submit score", score, "in", game_name, "but it was not high enough")
+		return "Your score is not high enough to reach top 10."
+	} else {
+		fmt.Println("Adding high score:", name, "with score:", score, "in", game_name)
+		stmt, err := database.Prepare(fmt.Sprint("INSERT INTO ", game_name, " (name, score) VALUES (?, ?)"))
+		if err != nil {
+			panic(err)
+		}
+		defer stmt.Close()
+		name = cut_string_to_length(name)
+		_, err = stmt.Exec(name, score)
+		if err != nil {
+			panic(err)
+		}
+	}
+	if number_of_high_scores(game_name) > 10 {
+		delete_lowest_score(game_name)
+	}
+	return "Successfully added high score."
 }
 
 func lowest_score(game_name string) int {
@@ -122,26 +142,17 @@ func number_of_high_scores(game_name string) int {
 	return number_of_high_scores
 }
 
-func add_high_score(name string, score int, game_name string) string {
-	if number_of_high_scores(game_name) >= 10 && score <= lowest_score(game_name) {
-		return "Your score is not high enough to reach top 10."
-	} else {
-		fmt.Println("Adding high score:", name, "with score:", score, "in", game_name)
-		stmt, err := database.Prepare(fmt.Sprint("INSERT INTO ", game_name, " (name, score) VALUES (?, ?)"))
-		if err != nil {
-			panic(err)
-		}
-		defer stmt.Close()
-		_, err = stmt.Exec(name, score)
-		if err != nil {
-			panic(err)
+func cut_string_to_length(string_to_cut string) string {
+	truncated := ""
+	count := 0
+	for _, char := range string_to_cut {
+		truncated += string(char)
+		count++
+		if count >= 20 {
+			break
 		}
 	}
-	if number_of_high_scores(game_name) > 10 {
-		delete_lowest_score(game_name)
-	}
-	println(number_of_high_scores(game_name))
-	return "Successfully added high score."
+	return truncated
 }
 
 func delete_lowest_score(game_name string) {
@@ -174,7 +185,7 @@ func open_database_connection() *sql.DB {
 }
 
 func sanitize_input(str string) string {
-	var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
+	var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 	str = nonAlphanumericRegex.ReplaceAllString(str, "")
 	return fmt.Sprintf("%q", str)
 }
