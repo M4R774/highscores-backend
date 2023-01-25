@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"time"
@@ -41,7 +42,12 @@ func API_endpoint(writer http.ResponseWriter, request *http.Request) {
 
 	switch request.Method {
 	case "GET":
-		fmt.Fprint(writer, get_high_scores(game_name))
+		query_parameters := request.URL.Query()
+		if query_parameters.Has("score") {
+			check_if_score_is_high_enough(query_parameters, writer, game_name)
+		} else {
+			fmt.Fprint(writer, get_high_scores(game_name))
+		}
 	case "POST":
 		name, score := request.FormValue("name"), request.FormValue("score")
 		score_int, err := strconv.Atoi(score)
@@ -55,6 +61,21 @@ func API_endpoint(writer http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(writer, add_high_score(name, score_int, game_name))
 	default:
 		fmt.Fprintf(writer, "Only GET and POST methods are supported.")
+	}
+}
+
+func check_if_score_is_high_enough(query_parameters url.Values, writer http.ResponseWriter, game_name string) {
+	score_parameter := query_parameters.Get("score")
+	score, err := strconv.Atoi(score_parameter)
+	if err != nil {
+		log.Println("Error during conversion.")
+		fmt.Fprintf(writer, "false")
+	} else {
+		if score > lowest_score(game_name) {
+			fmt.Fprintf(writer, "true")
+		} else {
+			fmt.Fprintf(writer, "false")
+		}
 	}
 }
 
