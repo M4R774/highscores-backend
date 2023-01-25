@@ -23,12 +23,14 @@ RUN adduser \
     --uid "${UID}" \
     "${USER}"
 WORKDIR $GOPATH/src/mypackage/myapp/
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
+
 COPY . .
 
-# Fetch dependencies.
-RUN go get -d -v
-
 # Build the binary
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm go build \
     -ldflags='-w -s -extldflags "-static"' -a \
     -o /go/bin/main .

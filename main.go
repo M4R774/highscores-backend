@@ -3,9 +3,12 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -17,15 +20,18 @@ var PORT int = 8080
 var database *sql.DB
 
 func main() {
-	fmt.Println("Starting application...")
+	log.SetFlags(0)
+	log.SetOutput(new(logWriter))
 
-	fmt.Println("Opening database...")
+	log.Println("Starting application...")
+
+	log.Println("Opening database...")
 	open_database_connection()
 	defer database.Close()
 
 	http.HandleFunc("/highscores/", API_endpoint)
 
-	fmt.Println("Starting http server on port", PORT)
+	log.Println("Starting http server on port", PORT)
 	http.ListenAndServe("0.0.0.0:"+strconv.Itoa(PORT), nil)
 }
 
@@ -36,13 +42,19 @@ func API_endpoint(writer http.ResponseWriter, request *http.Request) {
 
 	switch request.Method {
 	case "GET":
-		fmt.Fprint(writer, get_high_scores(game_name))
+		query_parameters := request.URL.Query()
+		if query_parameters.Has("score") {
+			check_if_score_is_high_enough(query_parameters, writer, game_name)
+		} else {
+			fmt.Fprint(writer, get_high_scores(game_name))
+		}
 	case "POST":
 		name, score := request.FormValue("name"), request.FormValue("score")
 		score_int, err := strconv.Atoi(score)
 
 		if err != nil {
-			fmt.Println("Error during conversion")
+			log.Println("Error during conversion.")
+			fmt.Fprintf(writer, "Invalid score value. Must be an integer.")
 			return
 		}
 		create_table_if_not_exists(game_name)
@@ -52,13 +64,28 @@ func API_endpoint(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
+func check_if_score_is_high_enough(query_parameters url.Values, writer http.ResponseWriter, game_name string) {
+	score_parameter := query_parameters.Get("score")
+	score, err := strconv.Atoi(score_parameter)
+	if err != nil {
+		log.Println("Error during conversion.")
+		fmt.Fprintf(writer, "false")
+	} else {
+		if score > lowest_score(game_name) {
+			fmt.Fprintf(writer, "true")
+		} else {
+			fmt.Fprintf(writer, "false")
+		}
+	}
+}
+
 func get_high_scores(game_name string) string {
 	stmt, err := database.Prepare(fmt.Sprint("SELECT name, score FROM ", game_name, " ORDER BY score DESC"))
 	if err != nil {
 		panic(err)
 	}
 	defer stmt.Close()
-	fmt.Println(game_name)
+	log.Println("Someone checked high scores for", game_name)
 	rows, err := stmt.Query(game_name)
 	if err != nil {
 		return "No high scores for " + game_name
@@ -79,10 +106,10 @@ func get_high_scores(game_name string) string {
 
 func add_high_score(name string, score int, game_name string) string {
 	if number_of_high_scores(game_name) >= 10 && score <= lowest_score(game_name) {
-		fmt.Println(name, "tried to submit score", score, "in", game_name, "but it was not high enough")
+		log.Println(name, "tried to submit score", score, "in", game_name, "but it was not high enough")
 		return "Your score is not high enough to reach top 10."
 	} else {
-		fmt.Println("Adding high score:", name, "with score:", score, "in", game_name)
+		log.Println("Adding high score:", name, "with score:", score, "in", game_name)
 		stmt, err := database.Prepare(fmt.Sprint("INSERT INTO ", game_name, " (name, score) VALUES (?, ?)"))
 		if err != nil {
 			panic(err)
@@ -180,7 +207,7 @@ func open_database_connection() *sql.DB {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Database connection opened. SQLite version: ", version)
+	log.Println("Database connection opened. SQLite version:", version)
 	return database
 }
 
@@ -200,4 +227,11 @@ func create_table_if_not_exists(game_name string) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+type logWriter struct {
+}
+
+func (writer logWriter) Write(bytes []byte) (int, error) {
+	return fmt.Print(time.Now().UTC().Format("02.01.2006 15:04:05") + " " + string(bytes))
 }
