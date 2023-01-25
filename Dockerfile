@@ -50,5 +50,7 @@ COPY --from=builder /go/bin/main /go/bin/main
 # Use an unprivileged user.
 USER appuser:appuser
 
+EXPOSE 8080
+
 # Run the main binary.
 ENTRYPOINT ["/go/bin/main"]

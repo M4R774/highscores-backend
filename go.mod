@@ -2,6 +2,8 @@ module github.com/M4R774/highscores-backend
 
 go 1.19
 
+require modernc.org/sqlite v1.20.2
+
 require (
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
@@ -20,7 +22,6 @@ require (
 	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.4.0 // indirect
 	modernc.org/opt v0.1.3 // indirect
-	modernc.org/sqlite v1.20.2 // indirect
 	modernc.org/strutil v1.1.3 // indirect
 	modernc.org/token v1.0.1 // indirect
 )
