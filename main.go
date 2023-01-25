@@ -90,6 +90,7 @@ func get_high_scores(game_name string) string {
 	log.Println("Someone checked high scores for", game_name)
 	rows, err := stmt.Query(game_name)
 	if err != nil {
+		log.Println(err)
 		return "No high scores for " + game_name
 	}
 	defer rows.Close()
