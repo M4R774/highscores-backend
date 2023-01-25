@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -69,9 +70,10 @@ func check_if_score_is_high_enough(query_parameters url.Values, writer http.Resp
 	score, err := strconv.Atoi(score_parameter)
 	if err != nil {
 		log.Println("Error during conversion.")
-		fmt.Fprintf(writer, "false")
+		fmt.Fprintf(writer, "Invalid score value. Must be an integer.")
 	} else {
-		if score > lowest_score(game_name) {
+		create_table_if_not_exists(game_name)
+		if number_of_high_scores(game_name) < 10 || score > lowest_score(game_name) {
 			fmt.Fprintf(writer, "true")
 		} else {
 			fmt.Fprintf(writer, "false")
@@ -128,6 +130,9 @@ func add_high_score(name string, score int, game_name string) string {
 }
 
 func lowest_score(game_name string) int {
+	if number_of_high_scores(game_name) == 0 {
+		return math.MinInt // No score -> lowest possible score
+	}
 	stmt, err := database.Prepare(fmt.Sprint("SELECT MIN(score) FROM ", game_name))
 	if err != nil {
 		panic(err)
@@ -233,5 +238,5 @@ type logWriter struct {
 }
 
 func (writer logWriter) Write(bytes []byte) (int, error) {
-	return fmt.Print(time.Now().UTC().Format("02.01.2006 15:04:05") + " " + string(bytes))
+	return fmt.Print(time.Now().Format("02.01.2006 15:04:05") + " " + string(bytes))
 }
