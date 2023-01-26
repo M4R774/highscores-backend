@@ -40,7 +40,6 @@ func API_endpoint(writer http.ResponseWriter, request *http.Request) {
 	request_url_path := fmt.Sprintf("%#v", request.URL.Path)
 	game_name := request_url_path[13 : len(request_url_path)-1]
 	game_name = sanitize_input(game_name)
-
 	switch request.Method {
 	case "GET":
 		query_parameters := request.URL.Query()
@@ -62,6 +61,28 @@ func API_endpoint(writer http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(writer, add_high_score(name, score_int, game_name))
 	default:
 		fmt.Fprintf(writer, "Only GET and POST methods are supported.")
+	}
+	print_number_of_tables()
+}
+
+func print_number_of_tables() {
+	stmt, err := database.Prepare("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
+	if err != nil {
+		panic(err)
+	}
+	defer stmt.Close()
+	rows, err := stmt.Query()
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var count int
+		err = rows.Scan(&count)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(count)
 	}
 }
 
@@ -160,8 +181,9 @@ func number_of_high_scores(game_name string) int {
 		panic(err)
 	}
 	defer stmt.Close()
-	rows, err := stmt.Query(game_name)
+	rows, err := stmt.Query()
 	if err != nil {
+		log.Println(err)
 		panic(err)
 	}
 	defer rows.Close()
@@ -189,6 +211,7 @@ func cut_string_to_length(string_to_cut string) string {
 }
 
 func delete_lowest_score(game_name string) {
+	log.Println("Deleting highscore")
 	stmt, err := database.Prepare(fmt.Sprint("DELETE FROM ", game_name, " WHERE rowid = (SELECT rowid FROM ", game_name, " WHERE score = ? LIMIT 1)"))
 	if err != nil {
 		panic(err)
@@ -220,19 +243,11 @@ func open_database_connection() *sql.DB {
 func sanitize_input(str string) string {
 	var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 	str = nonAlphanumericRegex.ReplaceAllString(str, "")
-	return fmt.Sprintf("%q", str)
+	return fmt.Sprintf("'" + str + "'")
 }
 
 func create_table_if_not_exists(game_name string) {
-	stmt, err := database.Prepare(fmt.Sprint("CREATE TABLE IF NOT EXISTS ", game_name, " (name TEXT, score INTEGER)"))
-	if err != nil {
-		panic(err)
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec(game_name)
-	if err != nil {
-		panic(err)
-	}
+	database.Exec(fmt.Sprint("CREATE TABLE IF NOT EXISTS ", game_name, " (name TEXT, score INTEGER)"))
 }
 
 type logWriter struct {
