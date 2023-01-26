@@ -16,7 +16,7 @@ To run inside Docker, see the deploy.sh script.
 
 GET `localhost:8080/highscores/[game_name]` returns list of the highscores for the given game.
 
-GET `localhost:8080/highscores/[game_name]?score=[score_to_check]` returns "true"/"false"
+GET `localhost:8080/highscores/[game_name]?score=[score_to_check]` returns `true`/`false`
  if the given score is high enough for the given game. Useful for example when you want to
   ask player nickname only in the case that the score is high enough for the listing.
 
