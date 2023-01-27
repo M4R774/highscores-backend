@@ -51,6 +51,10 @@ COPY --from=builder /go/bin/main /go/bin/main
 
 # Use an unprivileged user.
 USER appuser:appuser
+RUN mkdir -p /go/bin/main/certs
+RUN chown appuser /go/bin/main/certs
+WORKDIR /go/bin/main
+
 
 EXPOSE 8080
 
