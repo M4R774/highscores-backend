@@ -27,6 +27,9 @@ COPY go.mod .
 COPY go.sum .
 RUN go mod download
 
+RUN mkdir -p /go/bin/certs
+RUN chown appuser /go/bin/certs
+
 COPY . .
 
 # Build the binary
@@ -48,12 +51,11 @@ COPY --from=builder /etc/group /etc/group
 
 # Copy our static executable
 COPY --from=builder /go/bin/main /go/bin/main
+COPY --from=builder /go/bin/certs /go/bin/certs
 
 # Use an unprivileged user.
 USER appuser:appuser
-RUN mkdir -p /go/bin/main/certs
-RUN chown appuser /go/bin/main/certs
-WORKDIR /go/bin/main
+WORKDIR /go/bin
 
 
 EXPOSE 8080
