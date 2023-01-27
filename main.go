@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -18,7 +19,10 @@ import (
 var PORT int = 8080
 
 // Objects
-var database *sql.DB
+type Database struct {
+	mutex sync.Mutex
+	db    *sql.DB
+}
 
 func main() {
 	log.SetFlags(0)
@@ -27,16 +31,18 @@ func main() {
 	log.Println("Starting application...")
 
 	log.Println("Opening database...")
-	open_database_connection()
-	defer database.Close()
+	database := open_database_connection()
+	defer database.db.Close()
 
-	http.HandleFunc("/highscores/", API_endpoint)
+	http.HandleFunc("/highscores/", database.API_endpoint)
 
 	log.Println("Starting http server on port", PORT)
 	http.ListenAndServe("0.0.0.0:"+strconv.Itoa(PORT), nil)
 }
 
-func API_endpoint(writer http.ResponseWriter, request *http.Request) {
+func (database *Database) API_endpoint(writer http.ResponseWriter, request *http.Request) {
+	database.mutex.Lock()
+	defer database.mutex.Unlock()
 	request_url_path := fmt.Sprintf("%#v", request.URL.Path)
 	game_name := request_url_path[13 : len(request_url_path)-1]
 	game_name = sanitize_input(game_name)
@@ -44,9 +50,9 @@ func API_endpoint(writer http.ResponseWriter, request *http.Request) {
 	case "GET":
 		query_parameters := request.URL.Query()
 		if query_parameters.Has("score") {
-			check_if_score_is_high_enough(query_parameters, writer, game_name)
+			database.check_if_score_is_high_enough(query_parameters, writer, game_name)
 		} else {
-			fmt.Fprint(writer, get_high_scores(game_name))
+			fmt.Fprint(writer, database.get_high_scores(game_name))
 		}
 	case "POST":
 		name, score := request.FormValue("name"), request.FormValue("score")
@@ -57,44 +63,22 @@ func API_endpoint(writer http.ResponseWriter, request *http.Request) {
 			fmt.Fprintf(writer, "Invalid score value. Must be an integer.")
 			return
 		}
-		create_table_if_not_exists(game_name)
-		fmt.Fprint(writer, add_high_score(name, score_int, game_name))
+		database.create_table_if_not_exists(game_name)
+		fmt.Fprint(writer, database.add_high_score(name, score_int, game_name))
 	default:
 		fmt.Fprintf(writer, "Only GET and POST methods are supported.")
 	}
-	print_number_of_tables()
 }
 
-func print_number_of_tables() {
-	stmt, err := database.Prepare("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
-	if err != nil {
-		panic(err)
-	}
-	defer stmt.Close()
-	rows, err := stmt.Query()
-	if err != nil {
-		panic(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var count int
-		err = rows.Scan(&count)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(count)
-	}
-}
-
-func check_if_score_is_high_enough(query_parameters url.Values, writer http.ResponseWriter, game_name string) {
+func (database *Database) check_if_score_is_high_enough(query_parameters url.Values, writer http.ResponseWriter, game_name string) {
 	score_parameter := query_parameters.Get("score")
 	score, err := strconv.Atoi(score_parameter)
 	if err != nil {
 		log.Println("Error during conversion.")
 		fmt.Fprintf(writer, "Invalid score value. Must be an integer.")
 	} else {
-		create_table_if_not_exists(game_name)
-		if number_of_high_scores(game_name) < 10 || score > lowest_score(game_name) {
+		database.create_table_if_not_exists(game_name)
+		if database.number_of_high_scores(game_name) < 10 || score > database.lowest_score(game_name) {
 			fmt.Fprintf(writer, "true")
 		} else {
 			fmt.Fprintf(writer, "false")
@@ -102,8 +86,8 @@ func check_if_score_is_high_enough(query_parameters url.Values, writer http.Resp
 	}
 }
 
-func get_high_scores(game_name string) string {
-	stmt, err := database.Prepare(fmt.Sprint("SELECT name, score FROM ", game_name, " ORDER BY score DESC"))
+func (database *Database) get_high_scores(game_name string) string {
+	stmt, err := database.db.Prepare(fmt.Sprint("SELECT name, score FROM ", game_name, " ORDER BY score DESC"))
 	if err != nil {
 		panic(err)
 	}
@@ -128,34 +112,34 @@ func get_high_scores(game_name string) string {
 	return scores_string
 }
 
-func add_high_score(name string, score int, game_name string) string {
-	if number_of_high_scores(game_name) >= 10 && score <= lowest_score(game_name) {
+func (database *Database) add_high_score(name string, score int, game_name string) string {
+	if database.number_of_high_scores(game_name) >= 10 && score <= database.lowest_score(game_name) {
 		log.Println(name, "tried to submit score", score, "in", game_name, "but it was not high enough")
 		return "Your score is not high enough to reach top 10."
 	} else {
 		log.Println("Adding high score:", name, "with score:", score, "in", game_name)
-		stmt, err := database.Prepare(fmt.Sprint("INSERT INTO ", game_name, " (name, score) VALUES (?, ?)"))
+		stmt, err := database.db.Prepare(fmt.Sprint("INSERT INTO ", game_name, " (name, score) VALUES (?, ?)"))
 		if err != nil {
 			panic(err)
 		}
 		defer stmt.Close()
-		name = cut_string_to_length(name)
+		name = database.cut_string_to_length(name)
 		_, err = stmt.Exec(name, score)
 		if err != nil {
 			panic(err)
 		}
 	}
-	if number_of_high_scores(game_name) > 10 {
-		delete_lowest_score(game_name)
+	if database.number_of_high_scores(game_name) > 10 {
+		database.delete_lowest_score(game_name)
 	}
 	return "Successfully added high score."
 }
 
-func lowest_score(game_name string) int {
-	if number_of_high_scores(game_name) == 0 {
+func (database *Database) lowest_score(game_name string) int {
+	if database.number_of_high_scores(game_name) == 0 {
 		return math.MinInt // No score -> lowest possible score
 	}
-	stmt, err := database.Prepare(fmt.Sprint("SELECT MIN(score) FROM ", game_name))
+	stmt, err := database.db.Prepare(fmt.Sprint("SELECT MIN(score) FROM ", game_name))
 	if err != nil {
 		panic(err)
 	}
@@ -175,8 +159,8 @@ func lowest_score(game_name string) int {
 	return lowest_score
 }
 
-func number_of_high_scores(game_name string) int {
-	stmt, err := database.Prepare(fmt.Sprint("SELECT COUNT(*) FROM ", game_name))
+func (database *Database) number_of_high_scores(game_name string) int {
+	stmt, err := database.db.Prepare(fmt.Sprint("SELECT COUNT(*) FROM ", game_name))
 	if err != nil {
 		panic(err)
 	}
@@ -197,7 +181,7 @@ func number_of_high_scores(game_name string) int {
 	return number_of_high_scores
 }
 
-func cut_string_to_length(string_to_cut string) string {
+func (database *Database) cut_string_to_length(string_to_cut string) string {
 	truncated := ""
 	count := 0
 	for _, char := range string_to_cut {
@@ -210,29 +194,29 @@ func cut_string_to_length(string_to_cut string) string {
 	return truncated
 }
 
-func delete_lowest_score(game_name string) {
+func (database *Database) delete_lowest_score(game_name string) {
 	log.Println("Deleting highscore")
-	stmt, err := database.Prepare(fmt.Sprint("DELETE FROM ", game_name, " WHERE rowid = (SELECT rowid FROM ", game_name, " WHERE score = ? LIMIT 1)"))
+	stmt, err := database.db.Prepare(fmt.Sprint("DELETE FROM ", game_name, " WHERE rowid = (SELECT rowid FROM ", game_name, " WHERE score = ? LIMIT 1)"))
 	if err != nil {
 		panic(err)
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(lowest_score(game_name))
+	_, err = stmt.Exec(database.lowest_score(game_name))
 	if err != nil {
 		panic(err)
 	}
 }
 
-func open_database_connection() *sql.DB {
-	var err error
-	if database == nil {
-		database, err = sql.Open("sqlite", ":memory:")
-		if err != nil {
-			panic(err)
-		}
+func open_database_connection() Database {
+
+	sqlite_database, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		panic(err)
 	}
+	database := Database{db: sqlite_database}
+
 	var version string
-	err = database.QueryRow("SELECT SQLITE_VERSION()").Scan(&version)
+	err = database.db.QueryRow("SELECT SQLITE_VERSION()").Scan(&version)
 	if err != nil {
 		panic(err)
 	}
@@ -246,8 +230,8 @@ func sanitize_input(str string) string {
 	return fmt.Sprintf("'" + str + "'")
 }
 
-func create_table_if_not_exists(game_name string) {
-	database.Exec(fmt.Sprint("CREATE TABLE IF NOT EXISTS ", game_name, " (name TEXT, score INTEGER)"))
+func (database *Database) create_table_if_not_exists(game_name string) {
+	database.db.Exec(fmt.Sprint("CREATE TABLE IF NOT EXISTS ", game_name, " (name TEXT, score INTEGER)"))
 }
 
 type logWriter struct {
