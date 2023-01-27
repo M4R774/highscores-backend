@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/acme/autocert"
 	_ "modernc.org/sqlite"
 )
 
@@ -34,10 +36,22 @@ func main() {
 	database := open_database_connection()
 	defer database.db.Close()
 
-	http.HandleFunc("/highscores/", database.API_endpoint)
+	certManager := autocert.Manager{
+		Prompt:     autocert.AcceptTOS,
+		HostPolicy: autocert.HostWhitelist("martta.tk"), //Your domain here
+		Cache:      autocert.DirCache("certs"),          //Folder for storing certificates
+	}
 
-	log.Println("Starting http server on port", PORT)
-	http.ListenAndServe("0.0.0.0:"+strconv.Itoa(PORT), nil)
+	server := &http.Server{
+		Addr: ":https",
+		TLSConfig: &tls.Config{
+			GetCertificate: certManager.GetCertificate,
+			MinVersion:     tls.VersionTLS12, // improves cert reputation score at https://www.ssllabs.com/ssltest/
+		},
+	}
+	http.HandleFunc("/highscores/", database.API_endpoint)
+	go http.ListenAndServe(":http", certManager.HTTPHandler(nil))
+	log.Fatal(server.ListenAndServeTLS("", "")) //Key and cert are coming from Let's Encrypt
 }
 
 func (database *Database) API_endpoint(writer http.ResponseWriter, request *http.Request) {
