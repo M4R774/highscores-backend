@@ -39,7 +39,7 @@ func main() {
 	certManager := autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
 		HostPolicy: autocert.HostWhitelist("martta.tk"), //Your domain here
-		Cache:      autocert.DirCache("certs"),          //Folder for storing certificates
+		//Cache:      autocert.DirCache("certs"),          //Folder for storing certificates
 	}
 
 	server := &http.Server{
