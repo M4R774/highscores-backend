@@ -41,10 +41,10 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/highscores/", database.API_endpoint)
 
-	fmt.Println("TLS domain", domain)
+	fmt.Println("TLS domain:", domain)
 	certManager := autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
-		HostPolicy: autocert.HostWhitelist(domain),
+		HostPolicy: autocert.HostWhitelist(domain, "www."+domain),
 		//Cache:      autocert.DirCache("certs"),
 	}
 
