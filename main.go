@@ -61,7 +61,7 @@ func main() {
 			Cache:      autocert.DirCache(dataDir),
 		}
 
-		httpsSrv = makeHTTPServer()
+		httpsSrv = database.makeHTTPServer()
 		httpsSrv.Addr = ":443"
 		httpsSrv.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate}
 
@@ -78,7 +78,7 @@ func main() {
 	if flgRedirectHTTPToHTTPS {
 		httpSrv = makeHTTPToHTTPSRedirectServer()
 	} else {
-		httpSrv = makeHTTPServer()
+		httpSrv = database.makeHTTPServer()
 	}
 	// allow autocert handle Let's Encrypt callbacks over http
 	if m != nil {
@@ -304,9 +304,9 @@ func makeServerFromMux(mux *http.ServeMux) *http.Server {
 	}
 }
 
-func makeHTTPServer() *http.Server {
+func (database *Database) makeHTTPServer() *http.Server {
 	mux := &http.ServeMux{}
-	mux.HandleFunc("/higscores/", API_endpoint)
+	mux.HandleFunc("/higscores/", database.API_endpoint)
 	return makeServerFromMux(mux)
 }
 
