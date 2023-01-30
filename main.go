@@ -47,11 +47,10 @@ func main() {
 	certManager := autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
 		HostPolicy: autocert.HostWhitelist(domain),
-		Cache:      autocert.DirCache("certs"),
+		//Cache:      autocert.DirCache("certs"),
 	}
 
 	tlsConfig := certManager.TLSConfig()
-	tlsConfig.GetCertificate = getSelfSignedOrLetsEncryptCert(&certManager)
 	server := http.Server{
 		Addr:      ":443",
 		Handler:   mux,
