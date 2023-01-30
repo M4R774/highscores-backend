@@ -16,15 +16,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const (
-	httpPort = "0.0.0.0:8080"
-)
-
-var (
-	flgProduction          = true
-	flgRedirectHTTPToHTTPS = false
-)
-
 type Database struct {
 	mutex sync.Mutex
 	db    *sql.DB
@@ -63,6 +54,7 @@ func main() {
 }
 
 func (database *Database) API_endpoint(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Set("Access-Control-Allow-Origin", "*")
 	database.mutex.Lock()
 	defer database.mutex.Unlock()
 	request_url_path := fmt.Sprintf("%#v", request.URL.Path)
