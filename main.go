@@ -1,14 +1,12 @@
 package main
 
 import (
-	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"log"
 	"math"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"sync"
@@ -61,25 +59,6 @@ func main() {
 	fmt.Println("Server listening on", server.Addr)
 	if err := server.ListenAndServeTLS("", ""); err != nil {
 		fmt.Println(err)
-	}
-}
-
-func getSelfSignedOrLetsEncryptCert(certManager *autocert.Manager) func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-	return func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		dirCache, ok := certManager.Cache.(autocert.DirCache)
-		if !ok {
-			dirCache = "certs"
-		}
-
-		keyFile := filepath.Join(string(dirCache), hello.ServerName+".key")
-		crtFile := filepath.Join(string(dirCache), hello.ServerName+".crt")
-		certificate, err := tls.LoadX509KeyPair(crtFile, keyFile)
-		if err != nil {
-			fmt.Printf("%s\nFalling back to Letsencrypt\n", err)
-			return certManager.GetCertificate(hello)
-		}
-		fmt.Println("Loaded selfsigned certificate.")
-		return &certificate, err
 	}
 }
 
