@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"database/sql"
-	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -41,9 +40,6 @@ func main() {
 	defer database.db.Close()
 
 	domain := "martta.tk"
-	flag.StringVar(&domain, "domain", "", "domain name to request your certificate")
-	flag.Parse()
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/highscores/", database.API_endpoint)
 
