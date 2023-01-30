@@ -17,9 +17,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Constants
-var PORT int = 8080
-
 // Objects
 type Database struct {
 	mutex sync.Mutex
@@ -38,20 +35,22 @@ func main() {
 
 	certManager := autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
-		HostPolicy: autocert.HostWhitelist("martta.tk"), //Your domain here
-		//Cache:      autocert.DirCache("certs"),          //Folder for storing certificates
+		HostPolicy: autocert.HostWhitelist("martta.tk"), //your domain here
+		//Cache:      autocert.DirCache("certs"),          //folder for storing certificates
 	}
 
+	http.HandleFunc("/highscores/", database.API_endpoint)
+
 	server := &http.Server{
-		Addr: ":https",
+		Addr: ":443",
 		TLSConfig: &tls.Config{
 			GetCertificate: certManager.GetCertificate,
-			MinVersion:     tls.VersionTLS12, // improves cert reputation score at https://www.ssllabs.com/ssltest/
 		},
 	}
-	http.HandleFunc("/highscores/", database.API_endpoint)
-	go http.ListenAndServe(":http", certManager.HTTPHandler(nil))
-	log.Fatal(server.ListenAndServeTLS("", "")) //Key and cert are coming from Let's Encrypt
+
+	if err := server.ListenAndServeTLS("", ""); err != nil {
+		log.Println(err.Error())
+	}
 }
 
 func (database *Database) API_endpoint(writer http.ResponseWriter, request *http.Request) {
