@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/tls"
 	"database/sql"
 	"flag"
@@ -10,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"sync"
@@ -25,7 +25,7 @@ const (
 
 var (
 	flgProduction          = true
-	flgRedirectHTTPToHTTPS = true
+	flgRedirectHTTPToHTTPS = false
 )
 
 type Database struct {
@@ -40,55 +40,51 @@ func main() {
 	database := open_database_connection()
 	defer database.db.Close()
 
-	parseFlags()
-	var m *autocert.Manager
+	domain := "martta.tk"
+	flag.StringVar(&domain, "domain", "", "domain name to request your certificate")
+	flag.Parse()
 
-	var httpsSrv *http.Server
-	if flgProduction {
-		hostPolicy := func(ctx context.Context, host string) error {
-			// Note: change to your real host
-			allowedHost := "martta.tk"
-			if host == allowedHost {
-				return nil
-			}
-			return fmt.Errorf("acme/autocert: only %s host is allowed", allowedHost)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/highscores/", database.API_endpoint)
+
+	fmt.Println("TLS domain", domain)
+	certManager := autocert.Manager{
+		Prompt:     autocert.AcceptTOS,
+		HostPolicy: autocert.HostWhitelist(domain),
+		Cache:      autocert.DirCache("certs"),
+	}
+
+	tlsConfig := certManager.TLSConfig()
+	tlsConfig.GetCertificate = getSelfSignedOrLetsEncryptCert(&certManager)
+	server := http.Server{
+		Addr:      ":443",
+		Handler:   mux,
+		TLSConfig: tlsConfig,
+	}
+
+	go http.ListenAndServe(":80", certManager.HTTPHandler(nil))
+	fmt.Println("Server listening on", server.Addr)
+	if err := server.ListenAndServeTLS("", ""); err != nil {
+		fmt.Println(err)
+	}
+}
+
+func getSelfSignedOrLetsEncryptCert(certManager *autocert.Manager) func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		dirCache, ok := certManager.Cache.(autocert.DirCache)
+		if !ok {
+			dirCache = "certs"
 		}
 
-		dataDir := "."
-		m = &autocert.Manager{
-			Prompt:     autocert.AcceptTOS,
-			HostPolicy: hostPolicy,
-			Cache:      autocert.DirCache(dataDir),
+		keyFile := filepath.Join(string(dirCache), hello.ServerName+".key")
+		crtFile := filepath.Join(string(dirCache), hello.ServerName+".crt")
+		certificate, err := tls.LoadX509KeyPair(crtFile, keyFile)
+		if err != nil {
+			fmt.Printf("%s\nFalling back to Letsencrypt\n", err)
+			return certManager.GetCertificate(hello)
 		}
-
-		httpsSrv = database.makeHTTPServer()
-		httpsSrv.Addr = ":443"
-		httpsSrv.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate}
-
-		go func() {
-			fmt.Printf("Starting HTTPS server on %s\n", httpsSrv.Addr)
-			err := httpsSrv.ListenAndServeTLS("", "")
-			if err != nil {
-				log.Fatalf("httpsSrv.ListendAndServeTLS() failed with %s", err)
-			}
-		}()
-	}
-
-	var httpSrv *http.Server
-	if flgRedirectHTTPToHTTPS {
-		httpSrv = makeHTTPToHTTPSRedirectServer()
-	} else {
-		httpSrv = database.makeHTTPServer()
-	}
-	// allow autocert handle Let's Encrypt callbacks over http
-	if m != nil {
-		httpSrv.Handler = m.HTTPHandler(httpSrv.Handler)
-	}
-	httpSrv.Addr = httpPort
-	fmt.Printf("Starting HTTP server on %s\n", httpPort)
-	err := httpSrv.ListenAndServe()
-	if err != nil {
-		log.Fatalf("httpSrv.ListenAndServe() failed with %s", err)
+		fmt.Println("Loaded selfsigned certificate.")
+		return &certificate, err
 	}
 }
 
@@ -291,37 +287,4 @@ type logWriter struct {
 
 func (writer logWriter) Write(bytes []byte) (int, error) {
 	return fmt.Print(time.Now().Format("02.01.2006 15:04:05") + " " + string(bytes))
-}
-
-func makeServerFromMux(mux *http.ServeMux) *http.Server {
-	// set timeouts so that a slow or malicious client doesn't
-	// hold resources forever
-	return &http.Server{
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 5 * time.Second,
-		IdleTimeout:  120 * time.Second,
-		Handler:      mux,
-	}
-}
-
-func (database *Database) makeHTTPServer() *http.Server {
-	mux := &http.ServeMux{}
-	mux.HandleFunc("/higscores/", database.API_endpoint)
-	return makeServerFromMux(mux)
-}
-
-func makeHTTPToHTTPSRedirectServer() *http.Server {
-	handleRedirect := func(w http.ResponseWriter, r *http.Request) {
-		newURI := "https://" + r.Host + r.URL.String()
-		http.Redirect(w, r, newURI, http.StatusFound)
-	}
-	mux := &http.ServeMux{}
-	mux.HandleFunc("/", handleRedirect)
-	return makeServerFromMux(mux)
-}
-
-func parseFlags() {
-	flag.BoolVar(&flgProduction, "production", false, "if true, we start HTTPS server")
-	flag.BoolVar(&flgRedirectHTTPToHTTPS, "redirect-to-https", false, "if true, we redirect HTTP to HTTPS")
-	flag.Parse()
 }
