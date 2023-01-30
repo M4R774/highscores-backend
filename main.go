@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	httpPort = "127.0.0.1:8080"
+	httpPort = "0.0.0.0:8080"
 )
 
 var (
