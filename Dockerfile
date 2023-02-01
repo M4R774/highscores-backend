@@ -27,16 +27,13 @@ COPY go.mod .
 COPY go.sum .
 RUN go mod download
 
-RUN mkdir -p /go/bin/certs
-RUN chown appuser /go/bin/certs
-
 COPY . .
 
 # Build the binary
 RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm go build \
     -ldflags='-w -s -extldflags "-static"' -a \
-    -o /go/bin/main .
+    -o /go/bin/highscores-backend .
 
 ############################
 # STEP 2 build a small image
@@ -50,15 +47,16 @@ COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
 
 # Copy our static executable
-COPY --from=builder /go/bin/main /go/bin/main
-COPY --from=builder /go/bin/certs /go/bin/certs
+COPY --from=builder /go/bin/highscores-backend /go/bin/highscores-backend
+COPY ./config.json /go/bin/config.json
 
 # Use an unprivileged user.
 USER appuser:appuser
 WORKDIR /go/bin
 
 
-EXPOSE 8080
+EXPOSE 80
+EXPOSE 443
 
 # Run the main binary.
-ENTRYPOINT ["/go/bin/main"]
+ENTRYPOINT ["/go/bin/highscores-backend"]

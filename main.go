@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"sync"
@@ -15,11 +17,6 @@ import (
 
 	"golang.org/x/crypto/acme/autocert"
 	_ "modernc.org/sqlite"
-)
-
-const (
-	domain     = "martta.tk"
-	production = true
 )
 
 type Database struct {
@@ -34,9 +31,11 @@ func main() {
 	database := open_database_connection()
 	defer database.db.Close()
 
-	if production {
+	if !file_exists("DEV_ENV") {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/highscores/", database.API_endpoint)
+
+		domain := read_domain_from_config_file()
 
 		log.Println("TLS domain:", domain+", www."+domain)
 		certManager := autocert.Manager{
@@ -62,6 +61,31 @@ func main() {
 		http.HandleFunc("/highscores/", database.API_endpoint)
 		http.ListenAndServe(":80", nil)
 	}
+}
+
+func file_exists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}
+
+func read_domain_from_config_file() string {
+	var payload map[string]interface{}
+	if file_exists("config.json") {
+		content, err := ioutil.ReadFile("./config.json")
+		if err != nil {
+			log.Fatal("Error when opening file: ", err)
+		}
+		err = json.Unmarshal(content, &payload)
+		if err != nil {
+			log.Fatal("Error during Unmarshal(): ", err)
+		}
+	} else {
+		panic("Config file not found.")
+	}
+	return payload["domain"].(string)
 }
 
 func init_logging() {
