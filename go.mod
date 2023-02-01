@@ -5,6 +5,7 @@ go 1.19
 require modernc.org/sqlite v1.20.2
 
 require (
+	github.com/bdwilliams/go-jsonify v0.0.0-20141020182238-48749139e742 // indirect
 	golang.org/x/net v0.5.0 // indirect
 	golang.org/x/text v0.6.0 // indirect
 )

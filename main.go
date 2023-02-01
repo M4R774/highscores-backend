@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -16,44 +17,60 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+const (
+	domain     = "martta.tk"
+	production = true
+)
+
 type Database struct {
 	mutex sync.Mutex
 	db    *sql.DB
 }
 
 func main() {
-	log.SetFlags(0)
-	log.SetOutput(new(logWriter))
-	log.Println("Opening database...")
+	init_logging()
+	log.Println("Starting application...")
+
 	database := open_database_connection()
 	defer database.db.Close()
 
-	domain := "martta.tk"
-	mux := http.NewServeMux()
-	mux.HandleFunc("/highscores/", database.API_endpoint)
+	if production {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/highscores/", database.API_endpoint)
 
-	fmt.Println("TLS domain:", domain)
-	certManager := autocert.Manager{
-		Prompt:     autocert.AcceptTOS,
-		HostPolicy: autocert.HostWhitelist(domain, "www."+domain, "temp.martta.tk"),
-		//Cache:      autocert.DirCache("certs"),
-	}
+		log.Println("TLS domain:", domain+", www."+domain)
+		certManager := autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist(domain, "www."+domain),
+			//Cache:      autocert.DirCache("certs"),
+		}
 
-	tlsConfig := certManager.TLSConfig()
-	server := http.Server{
-		Addr:      ":443",
-		Handler:   mux,
-		TLSConfig: tlsConfig,
-	}
+		tlsConfig := certManager.TLSConfig()
+		server := http.Server{
+			Addr:      ":443",
+			Handler:   mux,
+			TLSConfig: tlsConfig,
+		}
 
-	go http.ListenAndServe(":80", certManager.HTTPHandler(nil))
-	fmt.Println("Server listening on", server.Addr)
-	if err := server.ListenAndServeTLS("", ""); err != nil {
-		fmt.Println(err)
+		go http.ListenAndServe(":80", certManager.HTTPHandler(nil))
+		log.Println("Server listening on", server.Addr)
+		if err := server.ListenAndServeTLS("", ""); err != nil {
+			fmt.Println(err)
+		}
+	} else {
+		log.Println("Starting local testing server on port 80.")
+		http.HandleFunc("/highscores/", database.API_endpoint)
+		http.ListenAndServe(":80", nil)
 	}
 }
 
+func init_logging() {
+	log.SetFlags(0)
+	log.SetOutput(new(logWriter))
+}
+
 func (database *Database) API_endpoint(writer http.ResponseWriter, request *http.Request) {
+	log.Println("Got request to /highscores")
 	writer.Header().Set("Access-Control-Allow-Origin", "*")
 	database.mutex.Lock()
 	defer database.mutex.Unlock()
@@ -66,7 +83,7 @@ func (database *Database) API_endpoint(writer http.ResponseWriter, request *http
 		if query_parameters.Has("score") {
 			database.check_if_score_is_high_enough(query_parameters, writer, game_name)
 		} else {
-			fmt.Fprint(writer, database.get_high_scores(game_name))
+			fmt.Fprint(writer, database.get_high_scores(query_parameters, game_name))
 		}
 	case "POST":
 		name, score := request.FormValue("name"), request.FormValue("score")
@@ -100,7 +117,7 @@ func (database *Database) check_if_score_is_high_enough(query_parameters url.Val
 	}
 }
 
-func (database *Database) get_high_scores(game_name string) string {
+func (database *Database) get_high_scores(query_parameters url.Values, game_name string) string {
 	stmt, err := database.db.Prepare(fmt.Sprint("SELECT name, score FROM ", game_name, " ORDER BY score DESC"))
 	if err != nil {
 		panic(err)
@@ -114,16 +131,41 @@ func (database *Database) get_high_scores(game_name string) string {
 	}
 	defer rows.Close()
 	scores_string := ""
-	for rows.Next() {
-		var name string
-		var score int
-		err = rows.Scan(&name, &score)
-		if err != nil {
-			panic(err)
+	if query_parameters.Has("json") {
+		position := 0
+		var list_of_players []Player
+		for rows.Next() {
+			position++
+			var name string
+			var score int
+			err = rows.Scan(&name, &score)
+			if err != nil {
+				panic(err)
+			}
+			new_player := Player{Name: name, Score: score, Position: position}
+			list_of_players = append(list_of_players, new_player)
 		}
-		scores_string += fmt.Sprintf("%-20s %d\n", name, score)
+		scores_bytes, _ := json.Marshal(list_of_players)
+		scores_string = string(scores_bytes)
+		log.Println(scores_string)
+	} else {
+		for rows.Next() {
+			var name string
+			var score int
+			err = rows.Scan(&name, &score)
+			if err != nil {
+				panic(err)
+			}
+			scores_string += fmt.Sprintf("%-20s %d\n", name, score)
+		}
 	}
 	return scores_string
+}
+
+type Player struct {
+	Name     string `json:"name"`
+	Score    int    `json:"score"`
+	Position int    `json:"position"`
 }
 
 func (database *Database) add_high_score(name string, score int, game_name string) string {
