@@ -96,6 +96,7 @@ func init_logging() {
 func (database *Database) API_endpoint(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Got request to /highscores")
 	writer.Header().Set("Access-Control-Allow-Origin", "*")
+	writer.Header().Set("Access-Control-Allow-Headers:", "Authorization")
 	database.mutex.Lock()
 	defer database.mutex.Unlock()
 	request_url_path := fmt.Sprintf("%#v", request.URL.Path)
@@ -196,7 +197,6 @@ func (database *Database) get_high_scores(query_parameters url.Values, game_name
 		}
 		scores_bytes, _ := json.Marshal(list_of_players)
 		scores_string = string(scores_bytes)
-		log.Println(scores_string)
 	} else {
 		for rows.Next() {
 			var name string
