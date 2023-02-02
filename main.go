@@ -35,7 +35,7 @@ func main() {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/highscores/", database.API_endpoint)
 
-		domain := read_domain_from_config_file()
+		domain := read_value_from_config_file("domain")
 
 		log.Println("TLS domain:", domain+", www."+domain)
 		certManager := autocert.Manager{
@@ -71,7 +71,7 @@ func file_exists(filename string) bool {
 	return !info.IsDir()
 }
 
-func read_domain_from_config_file() string {
+func read_value_from_config_file(key string) string {
 	var payload map[string]interface{}
 	if file_exists("config.json") {
 		content, err := ioutil.ReadFile("./config.json")
@@ -85,7 +85,7 @@ func read_domain_from_config_file() string {
 	} else {
 		panic("Config file not found.")
 	}
-	return payload["domain"].(string)
+	return payload[key].(string)
 }
 
 func init_logging() {
@@ -110,19 +110,44 @@ func (database *Database) API_endpoint(writer http.ResponseWriter, request *http
 			fmt.Fprint(writer, database.get_high_scores(query_parameters, game_name))
 		}
 	case "POST":
-		name, score := request.FormValue("name"), request.FormValue("score")
-		score_int, err := strconv.Atoi(score)
-
-		if err != nil {
-			log.Println("Error during conversion.")
-			fmt.Fprintf(writer, "Invalid score value. Must be an integer.")
-			return
-		}
-		database.create_table_if_not_exists(game_name)
-		fmt.Fprint(writer, database.add_high_score(name, score_int, game_name))
+		database.handle_post(request, game_name, writer)
 	default:
 		fmt.Fprintf(writer, "Only GET and POST methods are supported.")
 	}
+}
+
+func (database *Database) handle_post(request *http.Request, game_name string, writer http.ResponseWriter) {
+	if !valid_basic_auth(request, game_name) {
+		writer.WriteHeader(401)
+		return
+	}
+	name, score := request.FormValue("name"), request.FormValue("score")
+	score_int, err := strconv.Atoi(score)
+
+	if err != nil {
+		log.Println("Error during conversion.")
+		fmt.Fprintf(writer, "Invalid score value. Must be an integer.")
+		return
+	}
+	database.create_table_if_not_exists(game_name)
+	fmt.Fprint(writer, database.add_high_score(name, score_int, game_name))
+}
+
+func valid_basic_auth(request *http.Request, game_name string) bool {
+	username, password, ok := request.BasicAuth()
+	if !ok {
+		log.Println("Error parsing basic auth")
+		return false
+	}
+	if username != game_name {
+		log.Println("Invalid username provided")
+		return false
+	}
+	if password != read_value_from_config_file("password") {
+		log.Println("Invalid password provided.")
+		return false
+	}
+	return true
 }
 
 func (database *Database) check_if_score_is_high_enough(query_parameters url.Values, writer http.ResponseWriter, game_name string) {
