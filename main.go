@@ -95,8 +95,16 @@ func init_logging() {
 
 func (database *Database) API_endpoint(writer http.ResponseWriter, request *http.Request) {
 	log.Println("Got request to /highscores")
+
+	// Works with Godot 3.5.1
+	//writer.Header().Set("Access-Control-Allow-Origin", "*")
+	//writer.Header().Set("Access-Control-Allow-Headers:", "Authorization")
+
 	writer.Header().Set("Access-Control-Allow-Origin", "*")
-	writer.Header().Set("Access-Control-Allow-Headers:", "Authorization")
+	writer.Header().Set("Access-Control-Allow-Credentials", "true")
+	writer.Header().Set("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS,POST")
+	writer.Header().Set("Access-Control-Allow-Headers", "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers, Authorization")
+
 	database.mutex.Lock()
 	defer database.mutex.Unlock()
 	request_url_path := fmt.Sprintf("%#v", request.URL.Path)
