@@ -31,7 +31,7 @@ func main() {
 	database := open_database_connection()
 	defer database.db.Close()
 
-	if !file_exists("DEV_ENV") {
+	if file_exists("TLS_ENABLED") {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/highscores/", database.API_endpoint)
 
@@ -46,20 +46,20 @@ func main() {
 
 		tlsConfig := certManager.TLSConfig()
 		server := http.Server{
-			Addr:      ":443",
+			Addr:      ":8443",
 			Handler:   mux,
 			TLSConfig: tlsConfig,
 		}
 
-		go http.ListenAndServe(":80", certManager.HTTPHandler(nil))
+		go http.ListenAndServe(":8080", certManager.HTTPHandler(nil))
 		log.Println("Server listening on", server.Addr)
 		if err := server.ListenAndServeTLS("", ""); err != nil {
 			fmt.Println(err)
 		}
 	} else {
-		log.Println("Starting local testing server on port 80.")
+		log.Println("Starting local testing server on port 8080.")
 		http.HandleFunc("/highscores/", database.API_endpoint)
-		http.ListenAndServe(":80", nil)
+		http.ListenAndServe(":8080", nil)
 	}
 }
 

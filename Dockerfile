@@ -22,18 +22,6 @@ RUN adduser \
     --no-create-home \
     --uid "${UID}" \
     "${USER}"
-WORKDIR $GOPATH/src/mypackage/myapp/
-COPY go.mod .
-COPY go.sum .
-RUN go mod download
-
-COPY . .
-
-# Build the binary
-RUN go mod tidy
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm go build \
-    -ldflags='-w -s -extldflags "-static"' -a \
-    -o /go/bin/highscores-backend .
 
 ############################
 # STEP 2 build a small image
@@ -47,16 +35,15 @@ COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
 
 # Copy our static executable
-COPY --from=builder /go/bin/highscores-backend /go/bin/highscores-backend
+COPY ./highscores-backend /go/bin/highscores-backend
 COPY ./config.json /go/bin/config.json
 
 # Use an unprivileged user.
 USER appuser:appuser
 WORKDIR /go/bin
 
-
-EXPOSE 80
-EXPOSE 443
+EXPOSE 8080
+EXPOSE 8443
 
 # Run the main binary.
 ENTRYPOINT ["/go/bin/highscores-backend"]
