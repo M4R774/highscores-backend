@@ -28,8 +28,12 @@ RUN adduser \
 ############################
 FROM scratch
 
-# Import from builder.
+# Copy timezone from host
+COPY /etc/timezone /etc/timezone
+COPY /etc/localtime /etc/localtime
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+# Import from builder.
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
