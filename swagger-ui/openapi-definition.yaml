@@ -100,6 +100,8 @@ paths:
                   value: true
     post:
       summary: Post a highscore for a game
+      security:
+      - basicAuth: []
       parameters:
       - name: game_name
         in: path
@@ -120,9 +122,15 @@ paths:
       responses:
         "200":
           description: Highscore posted successfully
+        "401":
+          description: Error - Unauthorized
         "500":
           description: Server error
 components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
   schemas:
     ScoresJson:
       type: array
