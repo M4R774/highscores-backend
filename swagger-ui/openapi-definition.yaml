@@ -1,0 +1,151 @@
+---
+openapi: 3.0.0
+info:
+  title: Highscores API
+  description: API for retrieving and posting highscores for games
+  version: "1.0"
+servers:
+- url: https://virtserver.swaggerhub.com/MARTTA1994/highscores-backend/1.0
+  description: SwaggerHub API Auto Mocking
+- url: https://martta.tk
+paths:
+  /highscores/{game_name}:
+    get:
+      summary: Retrieve highscores for a game
+      parameters:
+      - name: game_name
+        in: path
+        description: Name of the game to retrieve highscores for
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+      - name: json
+        in: query
+        description: Return results in JSON format
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: boolean
+      - name: score
+        in: query
+        description: Check if a given score is high enough
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: integer
+      responses:
+        "200":
+          description: List of highscores for the game. If json query flag is used, the results will be in json format. Otherwise a plain text is used.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/inline_response_200'
+              examples:
+                scores_json:
+                  summary: Scores in json format
+                  value:
+                  - name: Elite
+                    score: 1337
+                    position: 1
+                  - name: El Diablo
+                    score: 666
+                    position: 2
+                  - name: Dank_memes
+                    score: 420
+                    position: 3
+                  - name: Aku Ankka
+                    score: 313
+                    position: 4
+                  - name: FockeWulf
+                    score: 190
+                    position: 5
+                  - name: MersuMies
+                    score: 109
+                    position: 6
+                  - name: Mr. Nice
+                    score: 69
+                    position: 7
+                  - name: Liftari
+                    score: 42
+                    position: 8
+                  - name: Zero
+                    score: 0
+                    position: 9
+                  - name: Team Killer
+                    score: -100
+                    position: 10
+            text/plain:
+              schema:
+                type: string
+              examples:
+                plain_text_scores:
+                  summary: Scores listed as plain text
+                  value: |-
+                    Elite                1337
+                    El Diablo            666
+                    Dank_memes           420
+                    Aku Ankka            313
+                    FockeWulf            190
+                    MersuMies            109
+                    Mr. Nice             69
+                    Liftari              42
+                    Zero                 0
+                    Team Killer          -100
+                score_check:
+                  summary: Check if given score is high enough for top list
+                  value: true
+    post:
+      summary: Post a highscore for a game
+      parameters:
+      - name: game_name
+        in: path
+        description: Name of the game to post a highscore for
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+      requestBody:
+        description: Highscore to post
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/highscores_game_name_body'
+        required: true
+      responses:
+        "200":
+          description: Highscore posted successfully
+        "500":
+          description: Server error
+components:
+  schemas:
+    ScoresJson:
+      type: array
+      items:
+        $ref: '#/components/schemas/ScoresJson_inner'
+    inline_response_200:
+      oneOf:
+      - $ref: '#/components/schemas/ScoresJson'
+    highscores_game_name_body:
+      required:
+      - name
+      - score
+      type: object
+      properties:
+        score:
+          type: integer
+          description: Player score
+        name:
+          type: string
+          description: Player nickname
+    ScoresJson_inner:
+      type: object
+      properties:
+        name:
+          type: string
+        score:
+          type: integer
